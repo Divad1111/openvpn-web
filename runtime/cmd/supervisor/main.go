@@ -43,14 +43,19 @@ func main() {
 		ConfigPath: getenv("OPENVPN_CONFIG_PATH", "/etc/openvpn/server.conf"),
 		TUNPath:    "/dev/net/tun", BinaryPath: "/usr/local/sbin/openvpn",
 	}
-	log.Println("runtime supervisor phase1: authenticated read-only status; OpenVPN is NOT started")
-	srv := &http.Server{Handler: supervisor.Handler(inspect, key), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 8192}
+	log.Println("runtime supervisor: independent OpenVPN child lifecycle")
+	controller := supervisor.NewController(inspect)
+	if controller.State().ConfigSafe {
+		controller.AutoStart()
+	}
+	srv := &http.Server{Handler: controller.Handler(key), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 8192}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+		_ = controller.Stop()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 	if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {

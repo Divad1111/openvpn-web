@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/Divad1111/openvpn-web/agent/internal/agent"
+	"github.com/Divad1111/openvpn-web/agent/internal/engine"
 	"github.com/Divad1111/openvpn-web/internal/ipc"
 	"github.com/Divad1111/openvpn-web/internal/policy"
+	"strconv"
 )
 
 func main() {
@@ -41,8 +43,20 @@ func main() {
 		log.Fatal(err)
 	}
 	defer func() { listener.Close(); os.Remove(path) }()
-	log.Printf("control-agent phase1: write-enabled=%v; all mutations disabled pending Phase 2", mode)
-	app := agent.Server{WriteEnabled: mode, RuntimeSocket: getenv("RUNTIME_SOCKET", "/run/runtime/control.sock"), RuntimeKeyPath: getenv("RUNTIME_IPC_KEY", "/run/runtime/agent.key")}
+	log.Printf("control-agent: write-enabled=%v; authenticated allowlist API", mode)
+	publicPort, err := strconv.Atoi(getenv("OPENVPN_PUBLIC_PORT", "1194"))
+	if err != nil {
+		log.Fatal("invalid public port")
+	}
+	eng, err := engine.New(getenv("AGENT_STATE_DIR", "/data/agent"), getenv("RUNTIME_CONFIG_DIR", "/data/runtime-config"), getenv("RUNTIME_SOCKET", "/run/runtime/control.sock"), getenv("RUNTIME_IPC_KEY", "/run/runtime/agent.key"), getenv("EASYRSA_PATH", "/opt/easy-rsa/easyrsa"), publicPort)
+	if err != nil {
+		log.Fatalf("engine initialize: %v", err)
+	}
+	defer eng.Close()
+	if err := eng.ValidateRuntimeDir(); err != nil {
+		log.Fatal(err)
+	}
+	app := &agent.API{WriteEnabled: mode, Engine: eng}
 	srv := &http.Server{Handler: app.Handler(secret), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 8192}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
