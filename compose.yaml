@@ -1,4 +1,4 @@
-# Phase 0 skeleton: no usable VPN, PKI or authenticated modifications yet.
+# Phase 1: authenticated read-only IPC; no usable VPN, PKI or mutation APIs yet.
 # Runtime remains independent when the two management containers are recreated.
 services:
   openvpn-runtime:
@@ -21,6 +21,9 @@ services:
     volumes:
       - runtime-ipc:/run/runtime
       - runtime-config:/etc/openvpn:ro
+    environment:
+      RUNTIME_IPC_KEY: /run/runtime/agent.key
+      OPENVPN_CONFIG_PATH: /etc/openvpn/server.conf
     healthcheck:
       test: ["CMD", "/usr/local/bin/supervisor", "--check"]
       interval: 15s
@@ -43,9 +46,11 @@ services:
       OPENVPN_MANAGER_WRITE_ENABLED: ${OPENVPN_MANAGER_WRITE_ENABLED:-false}
       AGENT_SOCKET: /run/agent/control.sock
       RUNTIME_SOCKET: /run/runtime/control.sock
+      RUNTIME_IPC_KEY: /run/runtime/agent.key
+      AGENT_IPC_KEY: /run/agent/manager.key
     volumes:
       - agent-ipc:/run/agent
-      - runtime-ipc:/run/runtime
+      - runtime-ipc:/run/runtime:ro
       - agent-state:/data/agent
       - runtime-config:/data/runtime-config
     healthcheck:
@@ -69,12 +74,13 @@ services:
     environment:
       OPENVPN_MANAGER_WRITE_ENABLED: ${OPENVPN_MANAGER_WRITE_ENABLED:-false}
       AGENT_SOCKET: /run/agent/control.sock
+      AGENT_IPC_KEY: /run/agent/manager.key
       MANAGER_TLS_DIR: /data/manager/tls
       WEB_DIR: /app/web
     ports:
       - "${MANAGER_BIND_IP:-127.0.0.1}:${MANAGER_HTTPS_PORT:-9443}:9443/tcp"
     volumes:
-      - agent-ipc:/run/agent
+      - agent-ipc:/run/agent:ro
       - manager-state:/data/manager
     healthcheck:
       test: ["CMD", "/usr/local/bin/manager", "--check"]

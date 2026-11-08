@@ -10,6 +10,8 @@ type Meta = {
   effectiveWriteAllowed: boolean
   runtimeState: string
   setupAvailable: boolean
+  runtimeAvailable: boolean
+  runtimeDiagnostics: string[]
 }
 const meta = ref<Meta | null>(null)
 const error = ref('')
@@ -41,13 +43,13 @@ onUnmounted(() => { if (timer !== undefined) clearInterval(timer) })
       <span class="version">v{{ meta?.openvpnVersion ?? '2.7.9' }}</span>
     </header>
     <div class="warning" role="alert">
-      <strong>开发阶段 · Phase 0</strong>
-      <p>当前仅实现容器、管理接口和界面骨架。尚不能创建证书、配置 VPN 或提供实际 VPN 连接。请勿用于生产环境。</p>
+      <strong>开发阶段 · Phase 1</strong>
+      <p>当前实现独立三容器、认证 Unix Socket 通信和只读诊断；尚未实现配置初始化、证书管理或真正的 VPN 连接。请勿用于生产环境。</p>
     </div>
     <section class="layout">
       <article class="card">
         <div class="section-title"><h2>Docker 写入保护</h2><span :class="['pill', meta?.effectiveWriteAllowed ? 'unlocked' : 'locked']">{{ meta?.effectiveWriteAllowed ? 'Docker 允许写入' : '只读保护中' }}</span></div>
-        <p>修改权限只来自 Docker 环境变量。网页不提供修改开关，所有修改接口在 Phase 0 均不可用。</p>
+        <p>修改权限只来自 Docker 环境变量。网页不提供修改开关，所有修改接口在 Phase 1 均不可用。</p>
         <dl>
           <div><dt>Manager 环境</dt><dd>{{ meta?.managerWriteEnabled ? 'true' : 'false' }}</dd></div>
           <div><dt>Control Agent</dt><dd>{{ !meta?.agentAvailable ? '未连接' : meta.agentWriteEnabled ? 'true' : 'false' }}</dd></div>
@@ -57,13 +59,15 @@ onUnmounted(() => { if (timer !== undefined) clearInterval(timer) })
       </article>
       <article class="card">
         <div class="section-title"><h2>服务状态</h2><span class="pill neutral">{{ meta?.runtimeState ?? '检测中' }}</span></div>
-        <p>运行容器已设计为与管理容器独立；当前 Supervisor 仅报告初始化状态。</p>
+        <p>运行容器已设计为与管理容器独立；Supervisor 只报告配置文件存在性、TUN 和程序检查，不会启动 OpenVPN。</p>
         <dl>
           <div><dt>管理 API</dt><dd>{{ error ? '不可用' : meta ? '在线' : '检测中' }}</dd></div>
           <div><dt>Agent</dt><dd>{{ meta?.agentAvailable ? '在线' : '未连接' }}</dd></div>
-          <div><dt>VPN 服务</dt><dd>未部署</dd></div>
+          <div><dt>Runtime IPC</dt><dd>{{ meta?.runtimeAvailable ? '已认证连接' : '未连接' }}</dd></div>
+          <div><dt>VPN 服务</dt><dd>未启动（Phase 3）</dd></div>
           <div><dt>初始化向导</dt><dd>Phase 3 开发</dd></div>
         </dl>
+        <p v-if="meta?.runtimeDiagnostics?.length" class="tip">诊断：{{ meta.runtimeDiagnostics.join('；') }}</p>
         <p v-if="error" class="error">连接错误：{{ error }}</p>
         <button type="button" class="refresh" @click="refresh">刷新状态</button>
       </article>

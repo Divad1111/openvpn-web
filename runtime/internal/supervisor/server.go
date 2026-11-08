@@ -3,28 +3,42 @@ package supervisor
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/Divad1111/openvpn-web/internal/ipc"
 )
 
-// Phase 0 does not start OpenVPN. This is intentional: no PKI/configuration
-// has been provisioned and there are no authenticated mutation RPCs yet.
-func Handler() http.Handler {
+// Handler exposes authenticated, read-only status and diagnostics. No write RPC
+// exists in Phase 1: neither web users nor an authenticated agent may start VPN.
+func Handler(i Inspector, secret []byte) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			deny(w)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(map[string]any{"state": "UNINITIALIZED", "phase": "PHASE_0_SCAFFOLD", "running": false})
+		reply(w, http.StatusOK, i.Inspect())
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		deny(w)
+	mux.HandleFunc("/v1/checks", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			deny(w)
+			return
+		}
+		status := i.Inspect()
+		reply(w, http.StatusOK, map[string]any{
+			"configPresent": status.ConfigPresent, "configSafe": status.ConfigSafe,
+			"tunAvailable": status.TUNAvailable, "binaryAvailable": status.BinaryAvailable,
+			"diagnostics": status.Diagnostics,
+		})
 	})
-	return mux
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { deny(w) })
+	return ipc.Authenticated(secret, mux)
+}
+func reply(w http.ResponseWriter, code int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(data)
 }
 func deny(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_, _ = w.Write([]byte(`{"code":"NOT_IMPLEMENTED"}`))
+	reply(w, http.StatusNotImplemented, map[string]string{"code": "NOT_IMPLEMENTED"})
 }

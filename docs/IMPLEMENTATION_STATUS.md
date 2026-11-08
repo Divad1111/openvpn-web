@@ -1,5 +1,17 @@
 # 实施记录与限制（2026-11-08）
 
+## Phase 1：已实现认证 RPC 与 Runtime 只读诊断
+
+- Manager ↔ Control Agent 与 Agent ↔ Runtime：两组独立 32 字节随机密钥 + HMAC-SHA256，签名绑定 method/URI/时间戳/nonce/请求体 hash，60 秒内重放防护；HMAC 错误返回 401。
+- Manager 与 Agent 再次分别读取严格 `true` Docker 写入模式；操作接口仍未开发，永远拒绝写入（只读返回 423，模式 true 返回 501）。
+- Runtime Supervisor：固定路径只读检查 TUN 字符设备、OpenVPN 可执行文件、server.conf 是否存在及权限；存在配置时仅报告 `CONFIG_PRESENT_UNVALIDATED`，不自动启动 VPN。
+- Docker IPC 卷：Manager ↔ Agent 的 Manager 挂载为只读；Agent ↔ Runtime 的 Agent 挂载为只读；运行时/证书卷保持分离。
+- 管理 API 新增 `GET /api/v1/system/checks`；页面显示经过认证的 Runtime 状态和检查诊断。
+- 已本地验证：`go test ./...`、`go test -race ./...`、`go vet ./...`、`bash tests/integration/local-ipc.sh`，均通过。
+- **未验证：** Docker 实际运行、容器间只读挂载的 Unix Socket 连接、DSM 7.x / DS920+ TUN/netfilter、OpenVPN 握手；暂无真实 VPN 连接能力。CI 镜像构建需 GitHub Actions 再次验证。
+- **待实现 Phase 2：** 登录/TOTP、Bootstrap Token、双门禁写 API/Agent RPC 的安全授权与事务、审计；Phase 3 才开始真实 OpenVPN。
+
+
 ## Phase 0：首批工程骨架
 
 | 内容 | 当前状态 | 说明 |
@@ -36,4 +48,4 @@
 
 ## 后续开发指令
 
-请按 AGENTS.md / DESIGN.md **Phase 1** 开发；不要跳阶段到“可用 VPN”。优先实现身份验证的受限 Agent/Runtime IPC、Runtime 无配置和合法配置状态机，独立重建 Manager/Agent 不影响 Runtime 的集成测试。
+请按 AGENTS.md / DESIGN.md **Phase 2** 开发；不要跳阶段到“可用 VPN”。优先实现管理员身份认证、TOTP 与 Bootstrap Token、写入权限双校验的操作请求与审计；不得提前开放真正的 VPN 修改接口。

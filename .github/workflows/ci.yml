@@ -1,4 +1,4 @@
-name: CI — Phase 0
+name: CI — Phase 1
 on:
   push:
     branches: [main, 'codex/**']
@@ -17,6 +17,8 @@ jobs:
           go-version-file: go.mod
       - name: Unit tests
         run: go test ./...
+      - name: Local three-process authenticated IPC smoke test
+        run: bash tests/integration/local-ipc.sh
       - name: Vet
         run: go vet ./...
       - name: Race tests
