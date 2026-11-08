@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Divad1111/openvpn-web/backend/internal/manager"
+	"github.com/Divad1111/openvpn-web/internal/lifecycle"
 	"github.com/Divad1111/openvpn-web/internal/policy"
 	"github.com/Divad1111/openvpn-web/internal/tlsconfig"
 )
@@ -31,6 +32,11 @@ func main() {
 	mode := policy.WriteEnabled(os.Getenv("OPENVPN_MANAGER_WRITE_ENABLED"))
 	log.Printf("manager boot: phase1, write-enabled=%v, HTTPS bootstrap certificate", mode)
 	dbdir := getenv("MANAGER_STATE_DIR", "/data/manager")
+	lock, lockErr := lifecycle.Hold(dbdir + "/.manager-live.lock")
+	if lockErr != nil {
+		log.Fatalf("manager lifecycle lock: %v", lockErr)
+	}
+	defer lock.Close()
 	auth, err := manager.OpenAuth(dbdir+"/state.db", dbdir+"/master.key")
 	if err != nil {
 		log.Fatalf("auth storage: %v", err)

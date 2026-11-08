@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Divad1111/openvpn-web/internal/ipc"
+	"github.com/Divad1111/openvpn-web/internal/lifecycle"
 	"github.com/Divad1111/openvpn-web/runtime/internal/supervisor"
 )
 
@@ -27,6 +28,11 @@ func main() {
 		_ = conn.Close()
 		return
 	}
+	lock, lockErr := lifecycle.Hold(getenv("RUNTIME_LOCK_PATH", "/run/runtime/.runtime-live.lock"))
+	if lockErr != nil {
+		log.Fatalf("runtime lifecycle lock: %v", lockErr)
+	}
+	defer lock.Close()
 	key, err := ipc.EnsureKey(getenv("RUNTIME_IPC_KEY", "/run/runtime/agent.key"), -1)
 	if err != nil {
 		log.Fatalf("IPC secret: %v", err)
