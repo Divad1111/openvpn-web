@@ -15,11 +15,11 @@
 ## Incomplete / not yet verified
 
 - Phase 3: TUN/iptables real-world connectivity on Synology DS920+ **NOT TESTED**; configuration can fail depending on DSM firewall/netfilter, IPv4 forwarding and router topology.
-- Phase 3: Easy-RSA 3.2.7 CA creation now supplies distinct `--passin` and `--passout` file paths because Easy-RSA requires both for encrypted CA creation; the Docker smoke test has a 180-second timeout. The complete signing/revoke workflow still requires CI and real-runtime validation.
-- Phase 4: end-to-end client connect, revoke and reconnect were not executed against a real OpenVPN server; implementation is not production certified.
+- Phase 3: Easy-RSA 3.2.7 CA creation supplies separate `--passin` and `--passout` files. GitHub Actions verified signing, CRL generation and OpenVPN TCP/TLS client authentication in isolated Docker containers; DS920+ compatibility is still untested.
+- Phase 4: a Linux GitHub Actions integration test **successfully completed a real OpenVPN 2.7.9 TCP/TLS client handshake** and verified that a revoked certificate is rejected on reconnect. This is an isolated synthetic Docker test, **not** the full Web→Agent→Runtime→NAS LAN end-to-end workflow; production certification remains pending.
 - Phase 5: **encrypted backup creation/download and a one-shot offline restore command are implemented but not yet production-validated**. Full cross-volume *atomic* rollback in the event of a sudden power loss is not guaranteed; persistent journals and rollback copies require operator intervention. Offline disaster recovery on a new NAS and a complete backup round-trip on real DS920+ hardware remain **untested**. Online restore remains disabled in Web. Do not assume an encrypted backup can be restored safely until the NAS recovery exercise is completed.
 - No full browser E2E test or external security assessment has been completed. The offline restore test uses synthetic PKI and does NOT prove DSM filesystem behavior.
-- Build pipeline and Vue TypeScript compilation require GitHub CI (authoring environment lacks network-accessible npm packages and Docker CLI).
+- GitHub Actions confirmed Go tests/race/vet, Vue TypeScript build, signed-source Docker builds, Easy-RSA smoke and isolated OpenVPN TCP/TLS + revocation. Hardware-specific integration and full browser E2E remain outstanding.
 
 ## Security decisions
 
@@ -37,11 +37,13 @@ go test -race ./...
 go vet ./...
 bash tests/integration/local-ipc.sh
 # Offline restore unit test (synthetic PKI, no real NAS):
-go test ./internal/recovery -run TestOfflineRestoreAndRollback -v
+go test ./internal/recovery -v
 # On Docker-capable Linux/CI:
 docker compose --env-file .env.example config --quiet
 docker compose --env-file .env.example build
 docker run --rm --entrypoint /usr/local/sbin/openvpn openvpn-ce:2.7.9-local --version
+# Linux host with /dev/net/tun:
+bash tests/integration/docker-vpn-e2e.sh
 ```
 
 Do not mark the remaining sections as complete until there are recorded test logs from Linux CI and Synology DS920+ hardware.
