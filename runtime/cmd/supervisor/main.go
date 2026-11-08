@@ -28,7 +28,7 @@ func main() {
 		_ = conn.Close()
 		return
 	}
-	lock, lockErr := lifecycle.Hold(getenv("RUNTIME_LOCK_PATH", "/run/runtime/.runtime-live.lock"))
+	lock, lockErr := lifecycle.Hold(getenv("RUNTIME_LOCK_PATH", filepath.Join(filepath.Dir(path), ".runtime-live.lock")))
 	if lockErr != nil {
 		log.Fatalf("runtime lifecycle lock: %v", lockErr)
 	}
