@@ -55,6 +55,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && install -d -m 0750 /etc/openvpn
 COPY --from=openvpn-build /usr/local/sbin/openvpn /usr/local/sbin/openvpn
 COPY --from=supervisor-build /out/supervisor /usr/local/bin/supervisor
+# Run with a fixed shared IPC GID so the agent can read group-only keys/socket.
+# No CAP_CHOWN is required (runtime cap_drop: ALL; cap_add: NET_ADMIN).
+USER 0:10001
 EXPOSE 1194/tcp
-# The supervisor is a Phase-0 status-only placeholder; it cannot yet start the VPN.
+# Phase 1 supervisor: authenticated read-only status, no VPN process until Phase 3.
 ENTRYPOINT ["/usr/local/bin/supervisor"]
