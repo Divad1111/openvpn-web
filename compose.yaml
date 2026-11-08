@@ -1,0 +1,90 @@
+# Phase 0 skeleton: no usable VPN, PKI or authenticated modifications yet.
+# Runtime remains independent when the two management containers are recreated.
+services:
+  openvpn-runtime:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.openvpn
+    image: openvpn-ce:2.7.9-local
+    container_name: openvpn-runtime
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENVPN_TCP_PORT:-1194}:1194/tcp"
+    volumes:
+      - runtime-ipc:/run/runtime
+      - runtime-config:/etc/openvpn:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/supervisor", "--check"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  control-agent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    image: openvpn-ce-control-agent:0.1.0
+    container_name: openvpn-control-agent
+    restart: unless-stopped
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      OPENVPN_MANAGER_WRITE_ENABLED: ${OPENVPN_MANAGER_WRITE_ENABLED:-false}
+      AGENT_SOCKET: /run/agent/control.sock
+      RUNTIME_SOCKET: /run/runtime/control.sock
+    volumes:
+      - agent-ipc:/run/agent
+      - runtime-ipc:/run/runtime
+      - agent-state:/data/agent
+      - runtime-config:/data/runtime-config
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/control-agent", "--check"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.manager
+    image: openvpn-ce-manager:0.1.0
+    container_name: openvpn-manager
+    restart: unless-stopped
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      OPENVPN_MANAGER_WRITE_ENABLED: ${OPENVPN_MANAGER_WRITE_ENABLED:-false}
+      AGENT_SOCKET: /run/agent/control.sock
+      MANAGER_TLS_DIR: /data/manager/tls
+      WEB_DIR: /app/web
+    ports:
+      - "${MANAGER_BIND_IP:-127.0.0.1}:${MANAGER_HTTPS_PORT:-9443}:9443/tcp"
+    volumes:
+      - agent-ipc:/run/agent
+      - manager-state:/data/manager
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/manager", "--check"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  manager-state:
+  agent-state:
+  agent-ipc:
+  runtime-ipc:
+  runtime-config:

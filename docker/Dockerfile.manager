@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+FROM node:22-bookworm-slim AS web-build
+WORKDIR /src/frontend
+COPY frontend/package.json ./
+# Phase 0: no lockfile can be generated in the offline authoring environment.
+# Lockfile generation and npm ci are mandatory before a production release.
+RUN npm install --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM golang:1.23-bookworm AS go-build
+WORKDIR /src
+COPY go.mod ./
+COPY internal ./internal
+COPY backend ./backend
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+      go build -trimpath -ldflags='-s -w' -o /out/manager ./backend/cmd/manager
+
+FROM debian:bookworm-slim AS manager
+RUN groupadd -g 10001 vpnmgr && useradd -r -u 10001 -g 10001 vpnmgr \
+    && install -d -m 0700 -o 10001 -g 10001 /data/manager \
+    && install -d -m 0750 -o 10001 -g 10001 /app/web
+COPY --from=go-build /out/manager /usr/local/bin/manager
+COPY --from=web-build /src/frontend/dist/ /app/web/
+USER 10001:10001
+EXPOSE 9443/tcp
+ENTRYPOINT ["/usr/local/bin/manager"]

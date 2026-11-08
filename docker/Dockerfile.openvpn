@@ -1,0 +1,58 @@
+# syntax=docker/dockerfile:1
+# OpenVPN Community Edition is built from the upstream signed source archive.
+# This Dockerfile intentionally does NOT use any prebuilt OpenVPN server image.
+FROM debian:bookworm-slim AS openvpn-build
+ARG OPENVPN_VERSION=2.7.9
+ARG OPENVPN_SIGNER_FPR=F554A3687412CFFEBDEFE0A312F5F7B42F2B01E7
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg gpgv build-essential pkg-config \
+      libssl-dev liblzo2-dev liblz4-dev libcap-ng-dev \
+      libnl-3-dev libnl-genl-3-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp/upstream
+RUN set -eux; \
+    umask 077; \
+    mkdir -p /tmp/gnupg; \
+    export GNUPGHOME=/tmp/gnupg; \
+    curl --fail --location --retry 3 --silent --show-error \
+      "https://keys.openpgp.org/vks/v1/by-fingerprint/${OPENVPN_SIGNER_FPR}" \
+      --output release-key.asc; \
+    gpg --batch --import release-key.asc; \
+    actual="$(gpg --batch --with-colons --fingerprint | awk -F: '$1=="fpr" {print $10; exit}')"; \
+    test "$actual" = "$OPENVPN_SIGNER_FPR"; \
+    curl --fail --location --retry 3 --silent --show-error \
+      "https://swupdate.openvpn.org/community/releases/openvpn-${OPENVPN_VERSION}.tar.gz" \
+      --output source.tar.gz; \
+    curl --fail --location --retry 3 --silent --show-error \
+      "https://swupdate.openvpn.org/community/releases/openvpn-${OPENVPN_VERSION}.tar.gz.asc" \
+      --output source.tar.gz.asc; \
+    gpg --batch --status-fd 1 --verify source.tar.gz.asc source.tar.gz > /tmp/gpg-verification.txt 2>&1; \
+    grep -F "[GNUPG:] VALIDSIG ${OPENVPN_SIGNER_FPR} " /tmp/gpg-verification.txt; \
+    tar --no-same-owner --no-same-permissions -xzf source.tar.gz
+WORKDIR /tmp/upstream/openvpn-2.7.9
+RUN set -eux; \
+    ./configure --disable-dco --disable-pkcs11; \
+    make -j2; \
+    make install; \
+    /usr/local/sbin/openvpn --version | head -n 1
+
+FROM golang:1.23-bookworm AS supervisor-build
+WORKDIR /src
+COPY go.mod ./
+COPY internal ./internal
+COPY runtime ./runtime
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+      go build -trimpath -ldflags='-s -w' -o /out/supervisor ./runtime/cmd/supervisor
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates libssl3 liblzo2-2 liblz4-1 libcap-ng0 \
+      libnl-3-200 libnl-genl-3-200 iproute2 iptables \
+    && rm -rf /var/lib/apt/lists/* \
+    && install -d -m 0770 -o 0 -g 10001 /run/runtime \
+    && install -d -m 0750 /etc/openvpn
+COPY --from=openvpn-build /usr/local/sbin/openvpn /usr/local/sbin/openvpn
+COPY --from=supervisor-build /out/supervisor /usr/local/bin/supervisor
+EXPOSE 1194/tcp
+# The supervisor is a Phase-0 status-only placeholder; it cannot yet start the VPN.
+ENTRYPOINT ["/usr/local/bin/supervisor"]

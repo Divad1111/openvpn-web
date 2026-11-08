@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.23-bookworm AS go-build
+WORKDIR /src
+COPY go.mod ./
+COPY internal ./internal
+COPY agent ./agent
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+      go build -trimpath -ldflags='-s -w' -o /out/control-agent ./agent/cmd/control-agent
+
+FROM debian:bookworm-slim AS agent
+RUN groupadd -g 10001 vpnmgr && useradd -r -u 10001 -g 10001 vpnmgr \
+    && install -d -m 0770 -o 10001 -g 10001 /run/agent \
+    && install -d -m 0770 -o 10001 -g 10001 /run/runtime \
+    && install -d -m 0700 -o 10001 -g 10001 /data/agent \
+    && install -d -m 0750 -o 10001 -g 10001 /data/runtime-config
+COPY --from=go-build /out/control-agent /usr/local/bin/control-agent
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/control-agent"]
