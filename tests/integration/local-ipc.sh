@@ -17,7 +17,7 @@ RUNTIME_SOCKET="$tmp/runtime/control.sock" RUNTIME_IPC_KEY="$tmp/runtime/agent.k
 pids+=("$!")
 AGENT_STATE_DIR="$tmp/agent/state" RUNTIME_CONFIG_DIR="$tmp/runtime/config" AGENT_SOCKET="$tmp/agent/control.sock" AGENT_IPC_KEY="$tmp/agent/manager.key" RUNTIME_SOCKET="$tmp/runtime/control.sock" RUNTIME_IPC_KEY="$tmp/runtime/agent.key" OPENVPN_MANAGER_WRITE_ENABLED=false "$tmp/agent-bin" > "$tmp/agent.log" 2>&1 &
 pids+=("$!")
-MANAGER_TLS_DIR="$tmp/manager/tls" AGENT_STATE_DIR="$tmp/agent/state" RUNTIME_CONFIG_DIR="$tmp/runtime/config" AGENT_SOCKET="$tmp/agent/control.sock" AGENT_IPC_KEY="$tmp/agent/manager.key" WEB_DIR="$tmp" OPENVPN_MANAGER_WRITE_ENABLED=false "$tmp/manager-bin" > "$tmp/manager.log" 2>&1 &
+MANAGER_TLS_DIR="$tmp/manager/tls" MANAGER_STATE_DIR="$tmp/manager/state" AGENT_STATE_DIR="$tmp/agent/state" RUNTIME_CONFIG_DIR="$tmp/runtime/config" AGENT_SOCKET="$tmp/agent/control.sock" AGENT_IPC_KEY="$tmp/agent/manager.key" WEB_DIR="$tmp" OPENVPN_MANAGER_WRITE_ENABLED=false "$tmp/manager-bin" > "$tmp/manager.log" 2>&1 &
 pids+=("$!")
 ready=0
 for _ in $(seq 1 100); do
