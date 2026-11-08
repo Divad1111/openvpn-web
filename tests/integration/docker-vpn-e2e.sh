@@ -12,7 +12,9 @@ tmp="$(mktemp -d)"
 cleanup() {
  docker rm -f "$client" "$server" >/dev/null 2>&1 || true
  docker network rm "$network" >/dev/null 2>&1 || true
- rm -rf "$tmp"
+ # Test-only PKI files can be owned by container root; remove them via Docker.
+ docker run --rm --user 0:0 -v "$tmp:/test" --entrypoint /bin/sh "$agent_image" -ec 'rm -rf /test/pki /test/pass /test/passout /test/tls-crypt.key /test/server.conf /test/client.conf' >/dev/null 2>&1 || true
+ rm -rf "$tmp" || true
 }
 trap cleanup EXIT
 chmod 700 "$tmp"
@@ -65,6 +67,14 @@ remote-cert-tls server
 data-ciphers AES-256-GCM:AES-128-GCM
 verb 3
 CONF
+# Bind-mounted test PKI must be readable by the root:10001 runtime process,
+# which has CAP_DAC_OVERRIDE deliberately removed. Directories are group-rx,
+# all test-only files are group-readable, and the owning Runner retains access.
+docker run --rm --user 0:0 -v "$tmp:/test" --entrypoint /bin/sh "$agent_image" -ec '
+ chgrp -R 10001 /test
+ find /test -type d -exec chmod 0750 {} +
+ find /test -type f -exec chmod 0640 {} +
+'
 # Both VPN containers have only NET_ADMIN and TUN, not --privileged.
 docker run -d --name "$server" --network "$network" --cap-drop ALL --cap-add NET_ADMIN \
  --device /dev/net/tun -v "$tmp:/test:ro" --entrypoint /usr/local/sbin/openvpn \
@@ -92,6 +102,10 @@ docker run --rm --user 0:0 -v "$tmp:/test" --entrypoint /bin/sh "$agent_image" -
  /opt/easy-rsa/easyrsa --batch --passin=file:/test/pass revoke-issued e2eclient
  /opt/easy-rsa/easyrsa --batch --passin=file:/test/pass --days=365 gen-crl
 '
+# Easy-RSA replaced the CRL file with a new root-owned inode; restore the
+# intended read group before testing revocation against a least-privilege server.
+docker run --rm --user 0:0 -v "$tmp:/test" --entrypoint /bin/sh "$agent_image" \
+ -ec 'chgrp 10001 /test/pki/crl.pem; chmod 0640 /test/pki/crl.pem'
 docker run -d --name "$client" --network "$network" --cap-drop ALL --cap-add NET_ADMIN \
  --device /dev/net/tun -v "$tmp:/test:ro" --entrypoint /usr/local/sbin/openvpn \
  "$vpn_image" --config /test/client.conf >/dev/null
