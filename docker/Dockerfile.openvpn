@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libnl-3-dev libnl-genl-3-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp/upstream
+# Check upstream primary-key fingerprint and GPG signature using a fresh keyring;
+# GPG may report a valid signing subkey instead of the primary fingerprint.
 RUN set -eux; \
     umask 077; \
     mkdir -p /tmp/gnupg; \
@@ -27,9 +29,6 @@ RUN set -eux; \
       "https://swupdate.openvpn.org/community/releases/openvpn-${OPENVPN_VERSION}.tar.gz.asc" \
       --output source.tar.gz.asc; \
     gpg --batch --status-fd 1 --verify source.tar.gz.asc source.tar.gz > /tmp/gpg-verification.txt 2>&1; \
-    # Only the verified upstream key exists in the isolated keyring. A release may \
-    # be signed by its signing subkey, whose VALIDSIG fingerprint differs from \
-    # the expected primary key fingerprint checked above. \
     grep -F "[GNUPG:] VALIDSIG " /tmp/gpg-verification.txt; \
     tar --no-same-owner --no-same-permissions -xzf source.tar.gz
 WORKDIR /tmp/upstream/openvpn-2.7.9
