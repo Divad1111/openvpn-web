@@ -30,7 +30,20 @@ func main() {
 	}
 	mode := policy.WriteEnabled(os.Getenv("OPENVPN_MANAGER_WRITE_ENABLED"))
 	log.Printf("manager boot: phase1, write-enabled=%v, HTTPS bootstrap certificate", mode)
-	h := manager.Server{WriteEnabled: mode, AgentSocket: getenv("AGENT_SOCKET", "/run/agent/control.sock"), AgentKeyPath: getenv("AGENT_IPC_KEY", "/run/agent/manager.key"), WebDir: getenv("WEB_DIR", "/app/web")}
+	dbdir := getenv("MANAGER_STATE_DIR", "/data/manager")
+	auth, err := manager.OpenAuth(dbdir+"/state.db", dbdir+"/master.key")
+	if err != nil {
+		log.Fatalf("auth storage: %v", err)
+	}
+	defer auth.Close()
+	token, err := auth.EnsureBootstrap()
+	if err != nil {
+		log.Fatalf("bootstrap: %v", err)
+	}
+	if token != "" {
+		log.Printf("ONE-TIME BOOTSTRAP TOKEN (will not be shown on restart): %s", token)
+	}
+	h := &manager.App{Auth: auth, WriteEnabled: mode, AgentSocket: getenv("AGENT_SOCKET", "/run/agent/control.sock"), AgentKeyPath: getenv("AGENT_IPC_KEY", "/run/agent/manager.key"), WebDir: getenv("WEB_DIR", "/app/web")}
 	server := &http.Server{Addr: ":9443", Handler: h.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	if err := server.ListenAndServeTLS(cert, key); err != nil {
 		log.Fatal(err)
