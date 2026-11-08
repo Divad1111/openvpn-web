@@ -43,10 +43,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Docker Compose validation
-        run: docker compose --env-file .env.example config --quiet
+        run: docker compose --env-file .env.example config --quiet && docker compose --profile recovery --env-file .env.example config --quiet
       - name: Build three images with source signature checks
         run: docker compose --env-file .env.example build
       - name: Verify OpenVPN version
         run: docker run --rm --entrypoint /usr/local/sbin/openvpn openvpn-ce:2.7.9-local --version | head -n 1 | grep 'OpenVPN 2.7.9'
+      - name: Verify offline recovery CLI is packaged
+        run: docker run --rm --entrypoint /usr/local/bin/recover openvpn-ce-control-agent:0.1.0 --help
       - name: Easy-RSA 3.2.7 PKI compatibility smoke test
         run: bash tests/integration/easyrsa-container.sh
