@@ -68,3 +68,7 @@ Docker 端口映射默认为 TCP 1194，若更改 `.env` 中的 `OPENVPN_TCP_POR
 ## 许可证
 
 本仓库 Apache-2.0；OpenVPN、Easy-RSA 等上游分别按各自许可证分发，不因本仓库许可证而更改。
+
+## Phase 5 当前边界（安全提示）
+
+已加入双份独立加密的 `.ovpnbackup` 创建、下载与完整性校验。Manager 的 SQLite、master.key 与 Agent 的 PKI、配置、SQLite 分别使用独立 salt/nonce 的 Argon2id + AES-256-GCM 保护；Manager 不持有 Agent 明文 CA 私钥。创建和下载均需 Docker 写模式与管理员 TOTP。**恢复、跨机器迁移与 DS920+ 全流程验收尚未完成**；请继续使用 DSM 受保护的离线卷快照作为独立兜底。

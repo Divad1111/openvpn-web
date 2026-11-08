@@ -80,7 +80,19 @@ func (p PKI) Init(ctx context.Context, pass string) error {
 	}
 	if err := p.withPass(ctx, pass, func(file string) error {
 		// passout is a file descriptor pathname, never a CLI literal secret.
-		a := []string{"--batch", "--passout=file:" + file, "build-ca"}
+		// Easy-RSA's encrypted build-ca requires both passin and passout.
+		// OpenSSL rejects the same file name for both options; use two
+		// separate 0600 files in the isolated /run/ca-pass tmpfs.
+		passCopy := file + "-passout"
+		original, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(passCopy, original, 0600); err != nil {
+			return err
+		}
+		defer os.Remove(passCopy)
+		a := []string{"--batch", "--passin=file:" + file, "--passout=file:" + passCopy, "build-ca"}
 		cmd := exec.CommandContext(ctx, p.EasyRSA, a...)
 		cmd.Env = append(os.Environ(), "EASYRSA_PKI="+p.Dir, "EASYRSA_REQ_CN=OpenVPN-CE-Manager-CA", "EASYRSA_ALGO=ec", "EASYRSA_CURVE=secp384r1", "EASYRSA_BATCH=1")
 		if err := cmd.Run(); err != nil {

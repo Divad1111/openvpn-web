@@ -51,12 +51,14 @@ services:
       RUNTIME_IPC_KEY: /run/runtime/agent.key
       AGENT_IPC_KEY: /run/agent/manager.key
       OPENVPN_PUBLIC_PORT: ${OPENVPN_TCP_PORT:-1194}
+      AGENT_BACKUP_EXPORT_DIR: /data/export
     tmpfs:
       - /run/ca-pass:uid=10001,gid=10001,mode=0700
     volumes:
       - agent-ipc:/run/agent
       - runtime-ipc:/run/runtime:ro
       - agent-state:/data/agent
+      - encrypted-backups:/data/export
       - runtime-config:/data/runtime-config
     healthcheck:
       test: ["CMD", "/usr/local/bin/control-agent", "--check"]
@@ -82,11 +84,13 @@ services:
       AGENT_IPC_KEY: /run/agent/manager.key
       MANAGER_TLS_DIR: /data/manager/tls
       WEB_DIR: /app/web
+      AGENT_BACKUP_EXPORT_DIR: /data/export
     ports:
       - "${MANAGER_BIND_IP:-127.0.0.1}:${MANAGER_HTTPS_PORT:-9443}:9443/tcp"
     volumes:
       - agent-ipc:/run/agent:ro
       - manager-state:/data/manager
+      - encrypted-backups:/data/export:ro
     healthcheck:
       test: ["CMD", "/usr/local/bin/manager", "--check"]
       interval: 15s
@@ -99,3 +103,4 @@ volumes:
   agent-ipc:
   runtime-ipc:
   runtime-config:
+  encrypted-backups:

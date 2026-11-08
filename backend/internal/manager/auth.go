@@ -33,6 +33,7 @@ func equalHash(a, b string) bool {
 type Auth struct {
 	db        *store.DB
 	masterKey []byte
+	keyPath   string
 	mu        sync.Mutex
 	attempts  map[string][]time.Time
 }
@@ -59,7 +60,7 @@ func OpenAuth(dbpath, masterKeypath string) (*Auth, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Auth{db: db, masterKey: key, attempts: map[string][]time.Time{}}, nil
+	return &Auth{db: db, masterKey: key, keyPath: masterKeypath, attempts: map[string][]time.Time{}}, nil
 }
 func (a *Auth) Close() { _ = a.db.Close() }
 func (a *Auth) AdminReady() bool {

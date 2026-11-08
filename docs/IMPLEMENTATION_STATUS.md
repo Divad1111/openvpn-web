@@ -9,13 +9,14 @@
 - Phase 2: SQLite auth, Argon2id (system libargon2), setup token, TOTP verification, secure sessions, CSRF and Origin checks, Manager + Agent Docker write-mode checks.
 - Phase 3: Easy-RSA 3.2.7 pinned installer, CA/server/client operations, IP/CIDR validation, generated TCP OpenVPN config and certificate publish, runtime start/stop/reload, scoped container NAT rules.
 - Phase 4: client list, one-time .ovpn export, CRL revoke with active-session kick, runtime connection list and admin audit API, Vue pages for these flows.
+- Phase 5 (partial): authenticated/TOTP/Docker-write-gated **encrypted backup creation, integrity validation and download**. SQLite uses a consistent backup API rather than copying live WAL files. Agent PKI and Manager master key/DB are independently encrypted with Argon2id + AES-256-GCM, then bundled into one `.ovpnbackup` archive; Manager only sees Agent ciphertext.
 
 ## Incomplete / not yet verified
 
 - Phase 3: TUN/iptables real-world connectivity on Synology DS920+ **NOT TESTED**; configuration can fail depending on DSM firewall/netfilter, IPv4 forwarding and router topology.
-- Phase 3: Easy-RSA compatibility of `--passin` and `--passout` is not yet verified in a running Docker image. See CI integration test.
+- Phase 3: Easy-RSA 3.2.7 CA creation now supplies distinct `--passin` and `--passout` file paths because Easy-RSA requires both for encrypted CA creation; the Docker smoke test has a 180-second timeout. The complete signing/revoke workflow still requires CI and real-runtime validation.
 - Phase 4: end-to-end client connect, revoke and reconnect were not executed against a real OpenVPN server; implementation is not production certified.
-- Phase 5: full encrypted backup/restore including Manager SQLite is not implemented; backup page is deliberately non-functional rather than exposing unsafe backups.
+- Phase 5: **encrypted backup creation and download are implemented but not yet production-validated**. Cross-container *restore* (including atomic rollback), offline disaster recovery on a new NAS, and backup round-trip on DS920+ remain **unimplemented/untested**; restore remains disabled in Web. Do not assume an encrypted backup can be restored until the recovery workflow is tested.
 - No full browser E2E test or security assessment has been completed.
 - Build pipeline and Vue TypeScript compilation require GitHub CI (authoring environment lacks network-accessible npm packages and Docker CLI).
 

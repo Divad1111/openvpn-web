@@ -8,6 +8,7 @@ import (
 	"github.com/Divad1111/openvpn-web/internal/ipc"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -95,8 +96,10 @@ func (a *API) Handler(secret []byte) http.Handler {
 			fail(w, err)
 			return
 		}
-		send(w, 200, map[string]any{"revisions": rows, "backupSupported": false})
+		send(w, 200, map[string]any{"revisions": rows, "backupSupported": true, "restoreSupported": false})
 	})
+	// Backup ciphertext is exported into a volume readable by Manager; the
+	// Agent's CA key volume is never directly accessible to Manager.
 	mux.HandleFunc("POST /v1/config/validate", func(w http.ResponseWriter, r *http.Request) {
 		var c engine.Config
 		if !decode(w, r, &c) {
@@ -119,6 +122,30 @@ func (a *API) Handler(secret []byte) http.Handler {
 			next(w, r)
 		}
 	}
+	mux.HandleFunc("POST /v1/backups", guarded(func(w http.ResponseWriter, r *http.Request) {
+		var input struct{ ID, Passphrase string }
+		if !decode(w, r, &input) {
+			return
+		}
+		meta, err := a.Engine.CreateEncryptedBackup(input.ID, input.Passphrase, getenvExport())
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		send(w, 201, meta)
+	}))
+	mux.HandleFunc("POST /v1/backups/{id}/validate", guarded(func(w http.ResponseWriter, r *http.Request) {
+		var input struct{ Passphrase string }
+		if !decode(w, r, &input) {
+			return
+		}
+		result, err := a.Engine.ValidateEncryptedBackup(r.PathValue("id"), input.Passphrase, getenvExport())
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		send(w, 200, result)
+	}))
 	mux.HandleFunc("POST /v1/pki/init", guarded(func(w http.ResponseWriter, r *http.Request) {
 		var v struct {
 			Passphrase string `json:"passphrase"`
@@ -235,3 +262,10 @@ func safeError(err error) string {
 }
 
 var _ = errors.New
+
+func getenvExport() string {
+	if val := os.Getenv("AGENT_BACKUP_EXPORT_DIR"); val != "" {
+		return val
+	}
+	return "/data/export"
+}

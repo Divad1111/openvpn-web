@@ -43,7 +43,7 @@ func main() {
 	if token != "" {
 		log.Printf("ONE-TIME BOOTSTRAP TOKEN (will not be shown on restart): %s", token)
 	}
-	h := &manager.App{Auth: auth, WriteEnabled: mode, AgentSocket: getenv("AGENT_SOCKET", "/run/agent/control.sock"), AgentKeyPath: getenv("AGENT_IPC_KEY", "/run/agent/manager.key"), WebDir: getenv("WEB_DIR", "/app/web")}
+	h := &manager.App{Auth: auth, WriteEnabled: mode, AgentSocket: getenv("AGENT_SOCKET", "/run/agent/control.sock"), AgentKeyPath: getenv("AGENT_IPC_KEY", "/run/agent/manager.key"), WebDir: getenv("WEB_DIR", "/app/web"), BackupDir: getenv("MANAGER_BACKUP_DIR", "/data/manager/backups"), AgentEncryptedBackupDir: getenv("AGENT_BACKUP_EXPORT_DIR", "/data/export")}
 	server := &http.Server{Addr: ":9443", Handler: h.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	if err := server.ListenAndServeTLS(cert, key); err != nil {
 		log.Fatal(err)

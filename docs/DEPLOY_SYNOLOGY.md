@@ -46,4 +46,4 @@ docker compose logs --tail=100 openvpn-runtime
 
 ## 5. 安全恢复
 
-当前完整加密备份/恢复功能仍在开发；维护前应在 DSM 中对持久化卷完成受保护的离线快照，并确保私钥备份和口令保存在不同地方。不要删除 `agent-state`/`manager-state`/`runtime-config` 卷；不要使用 `docker compose down -v`。
+Web 已提供加密备份创建、校验与下载，但**跨容器恢复尚未实现**；请勿把此版本视为已验证的灾备系统。维护前仍应在 DSM 中对持久化卷完成受保护的离线快照，并确保私钥备份和口令保存在不同地方。不要删除 `agent-state`/`manager-state`/`runtime-config` 卷；不要使用 `docker compose down -v`。

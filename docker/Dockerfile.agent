@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && install -d -m 0770 -o 10001 -g 10001 /run/agent \
     && install -d -m 0770 -o 10001 -g 10001 /run/runtime \
     && install -d -m 0700 -o 10001 -g 10001 /data/agent \
+    && install -d -m 0700 -o 10001 -g 10001 /data/export \
     && install -d -m 0750 -o 10001 -g 10001 /data/runtime-config
 COPY --from=easyrsa-build /out/easy-rsa/ /opt/easy-rsa/
 COPY --from=go-build /out/control-agent /usr/local/bin/control-agent

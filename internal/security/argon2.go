@@ -64,3 +64,13 @@ func VerifyPassword(encoded, password string) bool {
 	got, err := argon(password, salt)
 	return err == nil && subtle.ConstantTimeCompare(got, expected) == 1
 }
+
+// DeriveBackupKey derives a 256-bit encryption key using the same
+// memory-hard Argon2id policy used for passwords, with a distinct random salt.
+// This value must never be logged, exposed via HTTP, or persisted.
+func DeriveBackupKey(passphrase string, salt []byte) ([]byte, error) {
+	if len(passphrase) < 16 || len(passphrase) > 512 || len(salt) != argonSaltLen {
+		return nil, errors.New("backup passphrase must be 16..512 bytes and salt must be 16 bytes")
+	}
+	return argon(passphrase, salt)
+}

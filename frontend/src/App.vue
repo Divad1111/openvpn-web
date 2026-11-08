@@ -15,6 +15,7 @@ type Meta = {
 }
 type Client = { id: string; name: string; serial: string; expires_at: string; status: string; exported: string }
 type Config = { publicHost: string; vpnCIDR: string; lanCIDR: string; dns: string }
+type BackupRecord = { id: string; size: number; createdAt: string; encrypted: boolean }
 const meta = ref<Meta | null>(null)
 const username = ref('')
 const csrf = ref('')
@@ -31,6 +32,8 @@ const newClient = reactive({ name: '', days: 365 })
 const clients = ref<Client[]>([])
 const connections = ref<Record<string, string>[]>([])
 const audit = ref<Record<string, string>[]>([])
+const backups = ref<BackupRecord[]>([])
+const backupPassphrase = ref('')
 const pkiReady = ref(false)
 const tab = ref('dashboard')
 const needsSetup = computed(() => meta.value?.initialized === false)
@@ -122,6 +125,44 @@ async function getConnections() {
 async function getAudit() {
   await run(async () => { const out = await request<{ entries: Record<string, string>[] }>('/api/v1/audit'); audit.value = out.entries })
 }
+async function getBackups() {
+  await run(async () => { const out = await request<{ backups: BackupRecord[] }>('/api/v1/backups'); backups.value = out.backups })
+}
+async function makeBackup() {
+  if (!confirm('即将备份 CA 私钥、服务端和客户端证书及管理数据库。备份会使用独立口令加密，确认继续？')) return
+  await run(async () => {
+    const result = await request<{ id: string }>('/api/v1/backups', { passphrase: backupPassphrase.value, totp: totp.value })
+    info.value = `备份 ${result.id} 已创建。请下载并妥善保管备份和口令。`
+    const out = await request<{ backups: BackupRecord[] }>('/api/v1/backups')
+    backups.value = out.backups
+  })
+}
+async function validateBackup(id: string) {
+  await run(async () => {
+    const out = await request<{ restoreSupported: boolean }>('/api/v1/backups/' + encodeURIComponent(id) + '/validate', { passphrase: backupPassphrase.value, totp: totp.value })
+    info.value = `备份 ${id} 的 Manager 与 Agent 加密数据已通过验证。在线恢复仍未开放。`
+  })
+}
+async function downloadBackup(id: string) {
+  await run(async () => {
+    const response = await fetch('/api/v1/backups/' + encodeURIComponent(id) + '/download', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.value },
+      body: JSON.stringify({ passphrase: backupPassphrase.value, totp: totp.value })
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as Record<string, string>
+      throw new Error(body.code || `HTTP ${response.status}`)
+    }
+    const blob = await response.blob()
+    const href = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = href; a.download = `openvpn-ce-${id}.ovpnbackup`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(href)
+    info.value = '加密备份已请求下载。请立即保存在 NAS 之外的安全位置。'
+  })
+}
 async function addClient() {
   await run(async () => { await request('/api/v1/clients', { ...newClient, passphrase: caPassphrase.value, totp: totp.value }); newClient.name = ''; info.value = '证书已签发，请立即进行一次性配置导出。'; await getClients() })
 }
@@ -148,6 +189,7 @@ function selectTab(value: string) {
   if (value === 'clients') void getClients().catch(e => { error.value = String(e) })
   if (value === 'connections') void getConnections()
   if (value === 'audit') void getAudit()
+  if (value === 'backup') void getBackups()
 }
 onMounted(async () => { await restoreSession(); await refresh(); timer = setInterval(() => { void refresh() }, 15000) })
 onUnmounted(() => { if (timer) clearInterval(timer) })
@@ -220,7 +262,22 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       </section>
       <section v-if="tab==='connections'" class="card"><h2>在线连接</h2><p>由 OpenVPN Runtime 状态文件提供数据，不记录访问内容。</p><button @click="getConnections">刷新</button><pre class="code">{{ JSON.stringify(connections,null,2) }}</pre></section>
       <section v-if="tab==='audit'" class="card"><h2>管理审计</h2><button @click="getAudit">刷新</button><pre class="code">{{ JSON.stringify(audit,null,2) }}</pre></section>
-      <section v-if="tab==='backup'" class="card"><h2>加密备份与恢复</h2><p>此功能涉及 CA 私钥、SQLite 一致性和 VPN 运行时回滚；在备份恢复验收通过前不得投入生产使用。</p><p class="tip">暂未在本阶段提供未经验证的备份下载或恢复按钮。</p></section>
+      <section v-if="tab==='backup'" class="card">
+        <h2>加密备份</h2>
+        <p>每次备份包括加密的 Manager 数据库与密钥，以及独立加密的 Agent PKI/运行配置。CA 私钥明文不会进入 Manager 容器。</p>
+        <p class="warning"><strong>恢复尚未开放：</strong>正在进行跨容器原子恢复与 DSM 实机验收。请勿在生产 NAS 中将本版本当作已验证的灾难恢复方案。</p>
+        <div class="form-grid">
+          <label>备份独立口令（至少 16 字符） <input v-model="backupPassphrase" type="password" autocomplete="off" /></label>
+          <label>管理员 TOTP <input v-model.trim="totp" inputmode="numeric" maxlength="6" autocomplete="off" /></label>
+          <button :disabled="!writable||loading||backupPassphrase.length<16" @click="makeBackup">创建加密备份</button>
+          <button :disabled="loading" @click="getBackups">刷新备份列表</button>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>备份 ID</th><th>创建时间</th><th>大小</th><th>验证</th><th>导出</th></tr></thead><tbody>
+          <tr v-for="b in backups" :key="b.id"><td>{{ b.id }}</td><td>{{ b.createdAt }}</td><td>{{ Math.ceil(b.size/1024) }} KB</td>
+            <td><button :disabled="!writable||loading||backupPassphrase.length<16" @click="validateBackup(b.id)">验证完整性</button></td>
+            <td><button :disabled="!writable||loading||backupPassphrase.length<16" @click="downloadBackup(b.id)">下载加密备份</button></td>
+          </tr></tbody></table></div>
+      </section>
     </template>
     <footer>管理界面不提供 Docker 写入开关。任何系统修改仍须受 Manager/Agent 双重授权。未通过 DS920+ 实机验收前不得用于生产。</footer>
   </div>

@@ -19,9 +19,10 @@ import (
 )
 
 type App struct {
-	Auth                              *Auth
-	WriteEnabled                      bool
-	AgentSocket, AgentKeyPath, WebDir string
+	Auth                               *Auth
+	WriteEnabled                       bool
+	AgentSocket, AgentKeyPath, WebDir  string
+	BackupDir, AgentEncryptedBackupDir string
 }
 
 func (a *App) agentStatus() (agentStatus, error) {
@@ -253,9 +254,17 @@ func (a *App) Handler() http.Handler {
 			}
 			respond(w, 200, map[string]any{"entries": logs})
 			return
+		case r.URL.Path == "/api/v1/backups" && r.Method == http.MethodGet:
+			rows, err := a.BackupListing()
+			if err != nil {
+				rejectCode(w, "AGENT_UNAVAILABLE")
+				return
+			}
+			respond(w, 200, map[string]any{"backups": rows, "restoreSupported": false})
+			return
 		}
 		// Explicit fixed-operation routing. No arbitrary forwarding of user paths.
-		routes := map[string]string{"/api/v1/vpn/status": "/v1/status", "/api/v1/vpn/config": "/v1/config", "/api/v1/clients": "/v1/clients", "/api/v1/connections": "/v1/connections", "/api/v1/backups": "/v1/backups"}
+		routes := map[string]string{"/api/v1/vpn/status": "/v1/status", "/api/v1/vpn/config": "/v1/config", "/api/v1/clients": "/v1/clients", "/api/v1/connections": "/v1/connections"}
 		if r.Method == http.MethodGet {
 			if dest, ok := routes[r.URL.Path]; ok {
 				a.proxy(w, r, dest, nil)
@@ -263,6 +272,22 @@ func (a *App) Handler() http.Handler {
 			}
 		}
 		if r.Method == http.MethodPost {
+			// Sensitive backups have dedicated handlers: Agent ciphertext never
+			// passes through a generic unauthenticated or unbounded proxy.
+			if r.URL.Path == "/api/v1/backups" {
+				a.handleCreateBackup(w, r, sess)
+				return
+			}
+			if id, verb, ok := parseResource(r.URL.Path, "/api/v1/backups/"); ok {
+				if verb == "download" {
+					a.handleDownloadBackup(w, r, sess, id)
+					return
+				}
+				if verb == "validate" {
+					a.handleValidateBackup(w, r, sess, id)
+					return
+				}
+			}
 			action := r.URL.Path
 			dest := ""
 			sensitive := false
@@ -285,9 +310,6 @@ func (a *App) Handler() http.Handler {
 				dest = "/v1/runtime/reload"
 			case "/api/v1/clients":
 				dest = "/v1/clients"
-				sensitive = true
-			case "/api/v1/backups":
-				dest = "/v1/backups"
 				sensitive = true
 			case "/api/v1/vpn/config/validate":
 				a.preview(w, r)
