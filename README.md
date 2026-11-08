@@ -2,7 +2,7 @@
 
 社区版 OpenVPN Community Edition **2.7.9** 的 Web 管理项目，目标平台 **Synology DS920+（amd64）**、Docker Compose、TCP/IPv4。OpenVPN 二进制从官方 GPG 签名源码构建，不使用 OpenVPN Access Server 或第三方 VPN 镜像。
 
-> **安全警告：这是尚未经过 DS920+ 真实 TUN / iptables / TCP 连接验证的开发版本，不可作为生产 VPN 部署。** 目前代码包含认证、Easy-RSA、配置生成、客户端页面等功能，但 Phase 5 完整备份恢复尚未实现。参见 [实施状态](docs/IMPLEMENTATION_STATUS.md)。
+> **安全警告：这是尚未经过 DS920+ 真实 TUN / iptables / TCP 连接验证的开发版本，不可作为生产 VPN 部署。** 目前代码包含认证、Easy-RSA、配置生成、客户端页面等功能，已经实现离线恢复工具，但 Web 在线恢复及 DS920+ 灾备演练尚未完成。参见 [实施状态](docs/IMPLEMENTATION_STATUS.md)。
 
 ## 容器架构
 
@@ -63,7 +63,7 @@ Docker 端口映射默认为 TCP 1194，若更改 `.env` 中的 `OPENVPN_TCP_POR
 
 ## 当前不足
 
-加密备份/恢复、真实 Docker 整体联调、NAS 上的路由转发验证尚未完成。**请勿把页面“运行中”当作真实互联网 VPN 已连通的证明。**
+加密备份和离线恢复已实现，Linux Docker 中真实 TCP/TLS 握手及证书吊销重连拒绝已通过 CI；但完整 Web→Agent→Runtime 联调、DSM 网络/防火墙与 NAS 上的灾备恢复仍未实测。**请勿把页面“运行中”当作真实互联网 VPN 已连通的证明。**
 
 ## 许可证
 
@@ -71,7 +71,7 @@ Docker 端口映射默认为 TCP 1194，若更改 `.env` 中的 `OPENVPN_TCP_POR
 
 ## Phase 5 当前边界（安全提示）
 
-已加入双份独立加密的 `.ovpnbackup` 创建、下载与完整性校验。Manager 的 SQLite、master.key 与 Agent 的 PKI、配置、SQLite 分别使用独立 salt/nonce 的 Argon2id + AES-256-GCM 保护；Manager 不持有 Agent 明文 CA 私钥。创建和下载均需 Docker 写模式与管理员 TOTP。**恢复、跨机器迁移与 DS920+ 全流程验收尚未完成**；请继续使用 DSM 受保护的离线卷快照作为独立兜底。
+已加入双份独立加密的 `.ovpnbackup` 创建、下载与完整性校验。Manager 的 SQLite、master.key 与 Agent 的 PKI、配置、SQLite 分别使用独立 salt/nonce 的 Argon2id + AES-256-GCM 保护；Manager 不持有 Agent 明文 CA 私钥。创建和下载均需 Docker 写模式与管理员 TOTP。**已提供按需启动的离线 recovery 工具及回滚日志；Web 在线恢复、跨机器迁移与 DS920+ 全流程验收仍未完成**。请继续使用 DSM 受保护的离线卷快照作为独立兜底。
 
 ## 离线恢复（仅 Docker 管理员）
 
