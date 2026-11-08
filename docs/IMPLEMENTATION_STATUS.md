@@ -4,9 +4,9 @@
 
 | 内容 | 当前状态 | 说明 |
 |---|---|---|
-| 三容器 Compose | 已编写，未在 Docker Engine 实测 | manager / control-agent / openvpn-runtime，独立生命周期 |
-| OpenVPN 2.7.9 官方源码构建 | 已编写，Docker 构建未实测 | tarball + asc + 公钥指纹三项核验；禁用 DCO |
-| Vue 3 管理页 | 已编写，npm 构建未实测 | 展示状态；不提供可写按钮或敏感功能 |
+| 三容器 Compose | GitHub Actions 已完成构建；DS920+ 未实测 | manager / control-agent / openvpn-runtime，独立生命周期 |
+| OpenVPN 2.7.9 官方源码构建 | GitHub Actions Docker 构建与版本验证通过 | tarball + asc + 公钥指纹三项核验；禁用 DCO |
+| Vue 3 管理页 | GitHub Actions Vue 生产构建通过 | 展示状态；不提供可写按钮或敏感功能 |
 | Go Manager HTTPS | 已实现并通过 Go 测试 | 引导自签名证书；未实现身份认证，暂不生产可用 |
 | Go Agent Unix Socket 状态 | 已实现并通过 Go 测试 | 本阶段只有状态查询；尚无强认证 RPC |
 | Go Runtime Supervisor | 已实现状态骨架 | 不启动 OpenVPN，即使有配置也仅回报 UNINITIALIZED |
@@ -21,12 +21,12 @@
 - `go test ./...`：通过（开发容器 Go 1.23.2）
 - `go test -race ./...`：通过
 - `go vet ./...`：通过
-- Docker Engine：本会话环境无 Docker，**未进行实际镜像构建、签名验证运行或运行容器检查**。
-- npm：本会话环境不能联网下载依赖，**未进行前端真正打包检查**。GitHub Actions 已配置执行这些构建。
+- Docker Engine：本地环境无 Docker；**GitHub Actions run 42473097338 已实际通过三镜像构建、官方源码签名验证、OpenVPN 版本检查**；尚未在 DS920+ 上部署和运行容器。
+- npm：本地环境不能联网下载依赖；**GitHub Actions run 42473097338 已通过 npm 安装、Vue/TypeScript 构建**。
 
 ## 尚需处理的发布阻塞项
 
-1. 在 CI 实际完成 `docker compose build`；核对官方 2.7.9 GPG 签名、OpenVPN configure 与运行库、Node/Vue 构建。
+1. **CI 已完成** OpenVPN 2.7.9 官方验签源码构建、三镜像构建、Vue/Go 编译。接下来仍需 DS920+ 实机加载镜像、检查运行库、网络与容器权限。
 2. 生成并提交 frontend 的 lockfile，用 `npm ci` 替代当前的 `npm install`；固定基础镜像 digest，并执行容器镜像漏洞扫描和许可证清单。
 3. 三容器共享 Unix Socket 的 Docker named-volume UID/GID、Socket 访问在 DSM 实机必须验收。
 4. HTTPS 仅为短期自签名测试证书；需提供可信证书管理、到期更新与浏览器提示。
