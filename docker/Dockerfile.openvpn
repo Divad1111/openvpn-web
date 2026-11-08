@@ -7,7 +7,7 @@ ARG OPENVPN_SIGNER_FPR=F554A3687412CFFEBDEFE0A312F5F7B42F2B01E7
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg gpgv build-essential pkg-config \
       libssl-dev liblzo2-dev liblz4-dev libcap-ng-dev \
-      libnl-3-dev libnl-genl-3-dev \
+      libnl-3-dev libnl-genl-3-dev libpam0g-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp/upstream
 # Check upstream primary-key fingerprint and GPG signature using a fresh keyring;
@@ -49,7 +49,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates libssl3 liblzo2-2 liblz4-1 libcap-ng0 \
-      libnl-3-200 libnl-genl-3-200 iproute2 iptables \
+      libnl-3-200 libnl-genl-3-200 libpam0g iproute2 iptables \
     && rm -rf /var/lib/apt/lists/* \
     && install -d -m 0770 -o 0 -g 10001 /run/runtime \
     && install -d -m 0750 /etc/openvpn
