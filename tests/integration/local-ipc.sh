@@ -13,7 +13,7 @@ mkdir -p "$tmp/runtime" "$tmp/agent" "$tmp/manager/tls"
 go build -o "$tmp/supervisor" ./runtime/cmd/supervisor
 go build -o "$tmp/agent-bin" ./agent/cmd/control-agent
 go build -o "$tmp/manager-bin" ./backend/cmd/manager
-RUNTIME_SOCKET="$tmp/runtime/control.sock" RUNTIME_IPC_KEY="$tmp/runtime/agent.key" OPENVPN_CONFIG_PATH="$tmp/missing.conf" "$tmp/supervisor" > "$tmp/runtime.log" 2>&1 &
+RUNTIME_LOCK_PATH="$tmp/runtime/.runtime-live.lock" RUNTIME_SOCKET="$tmp/runtime/control.sock" RUNTIME_IPC_KEY="$tmp/runtime/agent.key" OPENVPN_CONFIG_PATH="$tmp/missing.conf" "$tmp/supervisor" > "$tmp/runtime.log" 2>&1 &
 pids+=("$!")
 AGENT_STATE_DIR="$tmp/agent/state" RUNTIME_CONFIG_DIR="$tmp/runtime/config" AGENT_SOCKET="$tmp/agent/control.sock" AGENT_IPC_KEY="$tmp/agent/manager.key" RUNTIME_SOCKET="$tmp/runtime/control.sock" RUNTIME_IPC_KEY="$tmp/runtime/agent.key" OPENVPN_MANAGER_WRITE_ENABLED=false "$tmp/agent-bin" > "$tmp/agent.log" 2>&1 &
 pids+=("$!")

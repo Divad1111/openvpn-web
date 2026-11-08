@@ -97,6 +97,27 @@ services:
       timeout: 3s
       retries: 3
 
+  # One-shot offline recovery. Not started with normal `docker compose up`.
+  # The tool only works when all three long-running services are stopped.
+  recovery:
+    profiles: ["recovery"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    image: openvpn-ce-control-agent:0.1.0
+    user: "10001:10001"
+    entrypoint: ["/usr/local/bin/recover"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      OPENVPN_MANAGER_WRITE_ENABLED: ${OPENVPN_MANAGER_WRITE_ENABLED:-false}
+    volumes:
+      - manager-state:/restore/manager
+      - agent-state:/restore/agent
+      - runtime-config:/restore/runtime
+      - runtime-ipc:/restore/runtime-ipc
+      - ./import:/import:ro
+
 volumes:
   manager-state:
   agent-state:

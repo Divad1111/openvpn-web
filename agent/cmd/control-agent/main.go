@@ -14,6 +14,7 @@ import (
 	"github.com/Divad1111/openvpn-web/agent/internal/agent"
 	"github.com/Divad1111/openvpn-web/agent/internal/engine"
 	"github.com/Divad1111/openvpn-web/internal/ipc"
+	"github.com/Divad1111/openvpn-web/internal/lifecycle"
 	"github.com/Divad1111/openvpn-web/internal/policy"
 	"strconv"
 )
@@ -48,6 +49,11 @@ func main() {
 	if err != nil {
 		log.Fatal("invalid public port")
 	}
+	lock, lockErr := lifecycle.Hold(getenv("AGENT_STATE_DIR", "/data/agent") + "/.agent-live.lock")
+	if lockErr != nil {
+		log.Fatalf("agent lifecycle lock: %v", lockErr)
+	}
+	defer lock.Close()
 	eng, err := engine.New(getenv("AGENT_STATE_DIR", "/data/agent"), getenv("RUNTIME_CONFIG_DIR", "/data/runtime-config"), getenv("RUNTIME_SOCKET", "/run/runtime/control.sock"), getenv("RUNTIME_IPC_KEY", "/run/runtime/agent.key"), getenv("EASYRSA_PATH", "/opt/easy-rsa/easyrsa"), publicPort)
 	if err != nil {
 		log.Fatalf("engine initialize: %v", err)

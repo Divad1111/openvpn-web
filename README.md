@@ -72,3 +72,38 @@ Docker 端口映射默认为 TCP 1194，若更改 `.env` 中的 `OPENVPN_TCP_POR
 ## Phase 5 当前边界（安全提示）
 
 已加入双份独立加密的 `.ovpnbackup` 创建、下载与完整性校验。Manager 的 SQLite、master.key 与 Agent 的 PKI、配置、SQLite 分别使用独立 salt/nonce 的 Argon2id + AES-256-GCM 保护；Manager 不持有 Agent 明文 CA 私钥。创建和下载均需 Docker 写模式与管理员 TOTP。**恢复、跨机器迁移与 DS920+ 全流程验收尚未完成**；请继续使用 DSM 受保护的离线卷快照作为独立兜底。
+
+## 离线恢复（仅 Docker 管理员）
+
+新增可选 Compose `recovery` profile，正常运行仍为三容器。恢复必须先停止 manager、control-agent、openvpn-runtime，输入独立备份密码，并显式传入 `--apply --confirm=RESTORE_ALL_OPENVPN_STATE`。恢复工具检查三个进程生命周期锁，验证双层加密与归档哈希，保留可人工回滚的旧状态。Web 不提供在线恢复按钮，实际 DS920+ 恢复仍需验收。详细步骤见 [Synology 部署与离线恢复说明](docs/DEPLOY_SYNOLOGY.md)。
+
+## 离线恢复（Phase 5 开发验证，仍需 DSM 实机演练）
+
+已实现一个**按需启动**的 `recovery` 服务，不属于常驻三容器。恢复只能由 Docker 管理员操作，网页中不开放恢复 API，且 Manager、Agent、Runtime 必须全部停止。恢复工具会验证 `.ovpnbackup` 双重加密负载、证书/SQLite 基本结构、原始配置和文件哈希，并在各数据卷上保留回滚副本和恢复日志。
+
+```bash
+# 备份归档放入 ./import/<32位备份ID>.ovpnbackup，确保仅 NAS 管理员可读。
+# 下面命令必须在维护窗口执行，会中断全部 VPN 客户端。
+# 先在 .env 中设置 OPENVPN_MANAGER_WRITE_ENABLED=true
+
+docker compose stop manager control-agent openvpn-runtime
+
+# 通过 stdin 传递口令，避免将密码放在命令行参数中（请使用仅管理员可读的私密文件）。
+docker compose --profile recovery run --rm -T recovery \
+  --id <32位备份ID> \
+  --archive /import/<32位备份ID>.ovpnbackup \
+  --check-only < /secure/backup-passphrase.txt
+
+# 校验通过后执行；恢复工具只接受写模式 true 和明确确认短语。
+docker compose --profile recovery run --rm -T recovery \
+  --id <32位备份ID> \
+  --archive /import/<32位备份ID>.ovpnbackup \
+  --apply --confirm RESTORE_ALL_OPENVPN_STATE < /secure/backup-passphrase.txt
+
+# 手动确认已完成原始数据卷备份，然后重新启动三个容器。
+docker compose up -d
+```
+
+如果恢复后需要回滚，**先停止三个容器**，再执行 `docker compose --profile recovery run --rm recovery --id <备份ID> --rollback --confirm RESTORE_ALL_OPENVPN_STATE`；无需重新提供归档口令。现有数据的旧版本会保留在各持久化卷的 `.ovpn-restore-old-<id>` 下，验证成功之前不要清理。恢复完成后把 `.env` 的写模式改回 `false`，再只重新创建 Manager 和 Agent。
+
+**限制：** 此功能已由 Go 级别的签名校验/恢复/回滚测试覆盖，但尚未在 DS920+ 真实持久卷、断电和端口转发环境中演练。实际使用前应对三个卷额外制作离线 DSM 快照。禁止 `docker compose down -v`，否则会删除持久卷。
