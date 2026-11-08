@@ -1,0 +1,46 @@
+name: CI — Phase 0
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Unit tests
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Race tests
+        run: go test -race ./...
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Build and TypeScript check
+        working-directory: frontend
+        run: npm run build
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker Compose syntax
+        run: docker compose --env-file .env.example config --quiet
+      - name: Build three images (requires online upstream source/signing key)
+        run: docker compose --env-file .env.example build
+      - name: Verify OpenVPN version in runtime image
+        run: docker run --rm --entrypoint /usr/local/sbin/openvpn openvpn-ce:2.7.9-local --version | head -n 1 | grep 'OpenVPN 2.7.9'
